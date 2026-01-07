@@ -1,0 +1,12 @@
+.env
+__pycache__/
+.DS_Store
+*.pyc
+.streamlit/
+requirements.txt
+access.log
+*.csv
+*.txt
+!media.txt
+!requirements.txt
+/temp/
