@@ -18,7 +18,7 @@ from news_utils import (
 
 # Page configuration
 st.set_page_config(
-    page_title="SOSV Curated News Search",
+    page_title="SOSV News Search",
     page_icon="📰",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -201,15 +201,25 @@ st.markdown("""
         margin-top: 25px !important;
     }
     
-    /* Title adjustment */
-    .app-title {
-        margin-top: -6rem !important;
-        margin-bottom: 0px !important;
-        font-size: 2.5rem !important;
+    /* Sidebar Title adjustment */
+    .sidebar-title {
+        color: #FFFFFF !important;
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
+        margin-top: -1rem !important;
+        margin-bottom: 0.5rem !important;
+        line-height: 1.1 !important;
     }
-    .title-sep {
-        border-top: 1px solid #DFE4EE;
-        margin-bottom: 0.8rem !important;
+    .sidebar-sep, .keywords-sep {
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        margin: 1rem 0 !important;
+    }
+    .sidebar-sep {
+        margin-bottom: 1.5rem !important;
+    }
+    .keywords-sep {
+        margin-top: 1.5rem !important;
+        margin-bottom: 1rem !important;
     }
     div[data-testid="stDateInput"] label {
         display: none !important;
@@ -230,6 +240,11 @@ st.markdown("""
     
     .main {
         background-color: #F8FAFC;
+        padding: 2rem 3rem !important; /* Extra horizontal padding to prevent text cutting */
+    }
+    /* Ensure no clipping on results */
+    [data-testid="stAppViewContainer"] {
+        padding-right: 1rem !important;
     }
 
     /* Article Card Styling - ULTRA COMPACT */
@@ -274,12 +289,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# App Title
-st.markdown('<h1 class="app-title">SOSV Curated News Search</h1>', unsafe_allow_html=True)
-st.markdown('<div class="title-sep"></div>', unsafe_allow_html=True)
-
 # Sidebar for configuration
 with st.sidebar:
+    # App Title and Separator at the TOP of sidebar
+    st.markdown('<h1 class="sidebar-title">SOSV News Search</h1>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-sep"></div>', unsafe_allow_html=True)
+    
     # Removed "Search Configuration" header
     
     # Preset Logic
@@ -358,6 +373,7 @@ with st.sidebar:
         s_date = col1.date_input("Start Date label hidden", value=default_start, label_visibility="collapsed")
         e_date = col2.date_input("End Date label hidden", value=default_end, label_visibility="collapsed")
 
+        st.markdown('<div class="keywords-sep"></div>', unsafe_allow_html=True)
         keywords = st.text_input("Keywords (comma separated)", placeholder="e.g. SOSV, Climate Tech")
         
         num_results = st.slider("Max results", 5, 100, 20)
