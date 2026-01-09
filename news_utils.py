@@ -26,8 +26,9 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
         end_date_query = today_dt.strftime("%Y-%m-%d")
     else:
         # Convert to string if they are date objects from Streamlit
-        start_date_query = start_date_str.strftime("%Y-%m-%d") if isinstance(start_date_str, (date, datetime)) else start_date_str
-        end_date_query = end_date_str.strftime("%Y-%m-%d") if isinstance(end_date_str, (date, datetime)) else end_date_str
+        # Google Search Operators (tbs) expects MM/DD/YYYY for cd_min/cd_max
+        start_date_query = start_date_str.strftime("%m/%d/%Y") if isinstance(start_date_str, (date, datetime)) else start_date_str
+        end_date_query = end_date_str.strftime("%m/%d/%Y") if isinstance(end_date_str, (date, datetime)) else end_date_str
 
     print(f"Searching for news from {start_date_query} to {end_date_query}")
     
@@ -130,32 +131,79 @@ def sort_articles_by_source_and_date(news_list):
     """
     Sort articles by source first, then by recency (newest first)
     """
-    def parse_date(date_str):
-        """Parse date string to datetime object for sorting"""
-        try:
-            # Handle format like "07/02/2025, 05:49 PM, +0000 UTC"
-            if date_str and "," in date_str:
-                date_part = date_str.split(",")[0]  # Get "07/02/2025"
-                return datetime.strptime(date_part, "%m/%d/%Y")
-            return datetime.min
-        except:
-            return datetime.min
-    
     # Sort by source first, then by date (newest first)
-    return sorted(news_list, key=lambda x: (x['source'], -parse_date(x['timestamp']).timestamp()))
+    return sorted(news_list, key=lambda x: (x['source'], -parse_date_for_filtering(x['timestamp']).timestamp()))
 
 def parse_date_for_filtering(date_str):
     """
     Parse date string for filtering purposes
     Returns datetime object or datetime.min if unparseable
+    Handles:
+    - "MM/DD/YYYY, ..."
+    - "X days ago"
+    - "X hours ago"
+    - "X minutes ago"
+    - "Yesterday"
     """
-    try:
-        # Handle format like "07/02/2025, 05:49 PM, +0000 UTC"
-        if date_str and "," in date_str:
-            date_part = date_str.split(",")[0]  # Get "07/02/2025"
-            return datetime.strptime(date_part, "%m/%d/%Y")
+    if not date_str:
         return datetime.min
-    except:
+
+    try:
+        now = datetime.now()
+        date_str = date_str.strip()
+
+        # Handle "ago" relative dates
+        if "ago" in date_str.lower():
+            if "minute" in date_str.lower():
+                minutes = int(date_str.split()[0])
+                from datetime import timedelta
+                return now - timedelta(minutes=minutes)
+            elif "hour" in date_str.lower():
+                hours = int(date_str.split()[0])
+                from datetime import timedelta
+                return now - timedelta(hours=hours)
+            elif "day" in date_str.lower():
+                days = int(date_str.split()[0])
+                from datetime import timedelta
+                return now - timedelta(days=days)
+            elif "week" in date_str.lower():
+                weeks = int(date_str.split()[0])
+                from datetime import timedelta
+                return now - timedelta(weeks=weeks)
+            elif "month" in date_str.lower():
+                months = int(date_str.split()[0])
+                from datetime import timedelta
+                # Approx
+                return now - timedelta(days=months*30)
+            elif "year" in date_str.lower():
+                years = int(date_str.split()[0])
+                from datetime import timedelta
+                return now - timedelta(days=years*365)
+        
+        # Handle "Yesterday"
+        if "yesterday" in date_str.lower():
+            from datetime import timedelta
+            return now - timedelta(days=1)
+
+        # Handle explicit formats
+        # "07/02/2025, 05:49 PM, +0000 UTC"
+        if "," in date_str:
+            date_part = date_str.split(",")[0].strip()  # Get "07/02/2025"
+            try:
+                return datetime.strptime(date_part, "%m/%d/%Y")
+            except ValueError:
+                pass
+        
+        # Try simple formats
+        for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%b %d, %Y", "%d %b %Y"]:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                continue
+
+        return datetime.min
+    except Exception as e:
+        print(f"Error parsing date '{date_str}': {e}")
         return datetime.min
 
 def ensure_result_folder(folder="result"):
