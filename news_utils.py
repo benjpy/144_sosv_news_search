@@ -14,6 +14,22 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
     """
     # If no dates provided, use default: past 6 months
     today_dt = datetime.now()
+
+    # Helper to parse various input formats
+    def try_parse_input_date(d_str, default_min=True):
+        if not d_str:
+            return None
+        # remove any whitespace
+        d_str = d_str.strip()
+        for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%Y%m%d", "%Y/%m/%d"]:
+            try:
+                dt = datetime.strptime(d_str, fmt)
+                return datetime.combine(dt.date(), datetime.min.time()) if default_min else datetime.combine(dt.date(), datetime.max.time())
+            except ValueError:
+                continue
+        raise ValueError(f"Could not parse date: {d_str}")
+
+    # Determine start and end date objects
     if not start_date_str or not end_date_str:
         if today_dt.month == 1:
             start_month = 12
@@ -21,14 +37,24 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
         else:
             start_month = today_dt.month - 6
             start_year = today_dt.year
-        start_date_obj = datetime(start_year, start_month, 1)
-        start_date_query = start_date_obj.strftime("%Y-%m-%d")
-        end_date_query = today_dt.strftime("%Y-%m-%d")
+        s_date_obj = datetime(start_year, start_month, 1)
+        e_date_obj = today_dt
     else:
-        # Convert to string if they are date objects from Streamlit
-        # Google Search Operators (tbs) expects MM/DD/YYYY for cd_min/cd_max
-        start_date_query = start_date_str.strftime("%m/%d/%Y") if isinstance(start_date_str, (date, datetime)) else start_date_str
-        end_date_query = end_date_str.strftime("%m/%d/%Y") if isinstance(end_date_str, (date, datetime)) else end_date_str
+        # PArse start date
+        if isinstance(start_date_str, (date, datetime)):
+             s_date_obj = datetime.combine(start_date_str, datetime.min.time()) if isinstance(start_date_str, date) and not isinstance(start_date_str, datetime) else start_date_str
+        else:
+             s_date_obj = try_parse_input_date(start_date_str, default_min=True)
+        
+        # Parse end date
+        if isinstance(end_date_str, (date, datetime)):
+             e_date_obj = datetime.combine(end_date_str, datetime.max.time()) if isinstance(end_date_str, date) and not isinstance(end_date_str, datetime) else end_date_str
+        else:
+             e_date_obj = try_parse_input_date(end_date_str, default_min=False)
+
+    # Convert to MM/DD/YYYY string for Google Search API
+    start_date_query = s_date_obj.strftime("%m/%d/%Y")
+    end_date_query = e_date_obj.strftime("%m/%d/%Y")
 
     print(f"Searching for news from {start_date_query} to {end_date_query}")
     
@@ -94,32 +120,7 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
         
         # Filter articles by date range after fetching
         filtered_results = []
-        try:
-            # Flexible date parsing for internal filtering
-
-            
-            # Helper to try parsing common formats
-            def try_parse_input_date(d_str, default_min=True):
-                for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%Y%m%d"]:
-                    try:
-                        dt = datetime.strptime(d_str, fmt)
-                        return datetime.combine(dt.date(), datetime.min.time()) if default_min else datetime.combine(dt.date(), datetime.max.time())
-                    except ValueError:
-                        continue
-                raise ValueError(f"Could not parse date: {d_str}")
-
-            if isinstance(start_date_str, (date, datetime)):
-                s_date_obj = datetime.combine(start_date_str, datetime.min.time()) if isinstance(start_date_str, date) and not isinstance(start_date_str, datetime) else start_date_str
-            else:
-                s_date_obj = try_parse_input_date(start_date_str, default_min=True)
-            
-            if isinstance(end_date_str, (date, datetime)):
-                e_date_obj = datetime.combine(end_date_str, datetime.max.time()) if isinstance(end_date_str, date) and not isinstance(end_date_str, datetime) else end_date_str
-            else:
-                e_date_obj = try_parse_input_date(end_date_str, default_min=False)
-        except Exception as e:
-            print(f"Error parsing start or end date: {e}")
-            return news_results, []
+        # (Using s_date_obj / e_date_obj calculated at start)
 
         for article in news_results:
             article_date = parse_date_for_filtering(article['timestamp'])
