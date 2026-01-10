@@ -7,9 +7,10 @@ from urllib.parse import urlparse
 
 from datetime import datetime, date
 
-def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None, end_date_str=None):
+def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None, end_date_str=None, allowed_domains=None):
     """
-    Fetch news from Google News using SerpAPI for a user-specified date range based on user keywords
+    Fetch news from Google News using SerpAPI for a user-specified date range based on user keywords.
+    If allowed_domains is provided, constructs a query to filter by specific sites (site:domain1 OR site:domain2...).
     Returns (raw_news_results, filtered_results)
     """
     # If no dates provided, use default: past 6 months
@@ -58,6 +59,27 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
 
     print(f"Searching for news from {start_date_query} to {end_date_query}")
     
+    # Construct Query
+    final_query = keywords
+    if allowed_domains:
+        # Build "site:domain1 OR site:domain2 ..." string
+        # Clean domains just in case
+        sites = []
+        for d in allowed_domains:
+            d = d.strip().lower()
+            # remove http/www if present for site operator cleanliness (though google handles them ok usually)
+            if "://" in d:
+                d = d.split("://")[1]
+            if d.startswith("www."):
+                d = d[4:]
+            if d:
+                sites.append(f"site:{d}")
+        
+        if sites:
+            site_query = " OR ".join(sites)
+            final_query = f"{keywords} ({site_query})"
+            print(f"Using targeted site query (length {len(final_query)})")
+
     # SerpAPI endpoint for Google News
     url = "https://serpapi.com/search"
     
@@ -65,7 +87,7 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
     params = {
         "engine": "google",
         "tbm": "nws",
-        "q": keywords,
+        "q": final_query,
         "api_key": api_key,
         "num": num_results,
         "hl": "en",

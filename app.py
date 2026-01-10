@@ -404,7 +404,8 @@ if search_button:
                     kw, 
                     num_results=num_results, 
                     start_date_str=s_date, 
-                    end_date_str=e_date
+                    end_date_str=e_date,
+                    allowed_domains=list(allowed_media)
                 )
                 
                 sorted_news = sort_articles_by_source_and_date(news_list)
