@@ -37,7 +37,8 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
     
     # Parameters for the API request
     params = {
-        "engine": "google_news",
+        "engine": "google",
+        "tbm": "nws",
         "q": keywords,
         "api_key": api_key,
         "num": num_results,
@@ -59,33 +60,34 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
         
         if "news_results" in data:
             for article in data["news_results"]:
-                # Extract source name properly
-                source_info = article.get("source", {})
-                if isinstance(source_info, dict):
-                    source_name = source_info.get("name", "Unknown source")
-                    source_url = source_info.get("link", "")
+                # Extract source name
+                # In 'google' engine, source is often just a string name
+                source_raw = article.get("source", "Unknown source")
+                if isinstance(source_raw, dict):
+                    source_name = source_raw.get("name", "Unknown source")
+                    # source_url might vary, usually not provided in simple dict
+                    source_url = "" 
                 else:
-                    source_name = str(source_info) if source_info else "Unknown source"
+                    source_name = str(source_raw)
                     source_url = ""
                 
-                # Extract author information properly
-                if isinstance(source_info, dict) and "authors" in source_info:
-                    author_info = source_info["authors"]
-                    if isinstance(author_info, list) and author_info:
-                        author_name = ", ".join(author_info)
-                    elif isinstance(author_info, str):
-                        author_name = author_info
-                    else:
-                        author_name = "Unknown author"
-                else:
-                    author_name = "Unknown author"
+                # 'google' engine often doesn't give specific author list in main snippet
+                # We'll just default to unknown or try to parse if hidden elsewhere
+                author_name = "Unknown author"
                 
+                # Prefer 'published_at' (UTC iso) over 'date' (relative string)
+                # 'date' might be "2 days ago" or "Nov 3, 2023"
+                # 'published_at' is "2023-11-03 07:00:00 UTC"
+                raw_date = article.get("published_at")
+                if not raw_date:
+                    raw_date = article.get("date", "No date available")
+
                 news_item = {
                     "title": article.get("title", "No title available"),
                     "url": article.get("link", "No URL available"),
                     "source": source_name,
                     "author": author_name,
-                    "timestamp": article.get("date", "No date available"),
+                    "timestamp": raw_date,
                     "source_url": source_url
                 }
                 news_results.append(news_item)
@@ -94,15 +96,27 @@ def get_news_by_keywords(api_key, keywords, num_results=10, start_date_str=None,
         filtered_results = []
         try:
             # Flexible date parsing for internal filtering
+
+            
+            # Helper to try parsing common formats
+            def try_parse_input_date(d_str, default_min=True):
+                for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%Y%m%d"]:
+                    try:
+                        dt = datetime.strptime(d_str, fmt)
+                        return datetime.combine(dt.date(), datetime.min.time()) if default_min else datetime.combine(dt.date(), datetime.max.time())
+                    except ValueError:
+                        continue
+                raise ValueError(f"Could not parse date: {d_str}")
+
             if isinstance(start_date_str, (date, datetime)):
                 s_date_obj = datetime.combine(start_date_str, datetime.min.time()) if isinstance(start_date_str, date) and not isinstance(start_date_str, datetime) else start_date_str
             else:
-                s_date_obj = datetime.strptime(start_date_str, "%Y%m%d") if len(start_date_str) == 8 else datetime.strptime(start_date_str, "%Y-%m-%d")
+                s_date_obj = try_parse_input_date(start_date_str, default_min=True)
             
             if isinstance(end_date_str, (date, datetime)):
                 e_date_obj = datetime.combine(end_date_str, datetime.max.time()) if isinstance(end_date_str, date) and not isinstance(end_date_str, datetime) else end_date_str
             else:
-                e_date_obj = datetime.strptime(end_date_str, "%Y%m%d") if len(end_date_str) == 8 else datetime.strptime(end_date_str, "%Y-%m-%d")
+                e_date_obj = try_parse_input_date(end_date_str, default_min=False)
         except Exception as e:
             print(f"Error parsing start or end date: {e}")
             return news_results, []
@@ -187,13 +201,22 @@ def parse_date_for_filtering(date_str):
 
         # Handle explicit formats
         # "07/02/2025, 05:49 PM, +0000 UTC"
-        if "," in date_str:
+        if "," in date_str and "UTC" in date_str:
             date_part = date_str.split(",")[0].strip()  # Get "07/02/2025"
             try:
                 return datetime.strptime(date_part, "%m/%d/%Y")
             except ValueError:
                 pass
         
+        # Handle ISO-like format "2023-03-26 07:00:00 UTC"
+        if "UTC" in date_str and "-" in date_str:
+             # trim " UTC" and parse
+             clean_str = date_str.replace(" UTC", "").strip()
+             try:
+                 return datetime.strptime(clean_str, "%Y-%m-%d %H:%M:%S")
+             except ValueError:
+                 pass
+
         # Try simple formats
         for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%b %d, %Y", "%d %b %Y"]:
             try:
